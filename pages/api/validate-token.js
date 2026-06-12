@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     .single()
 
   if (error || !data) return res.status(200).json({ valid: false, reason: 'Token not found' })
-  if (!data.can_vote) return res.status(200).json({ valid: false, reason: 'Your group is not currently eligible to vote. Please contact the administrator.' })
+  if (!data.can_vote) return res.status(200).json({ valid: false, reason: 'Your club is not currently eligible to vote. Please contact the administrator.' })
   if (data.is_used) return res.status(200).json({ valid: false, reason: 'This token has already been used. Each group may only vote once.' })
 
   return res.status(200).json({ valid: true })
