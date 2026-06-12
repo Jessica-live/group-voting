@@ -106,9 +106,9 @@ export default async function handler(req, res) {
 
   // Add candidate
   if (req.method === 'POST' && action === 'add-candidate') {
-    const { position_id, name, bio } = req.body
+    const { position_id, name, bio, club_name } = req.body
     if (!position_id || !name) return res.status(400).json({ error: 'position_id and name required' })
-    const { data: cand, error: ce } = await db.from('candidates').insert({ position_id, name, bio }).select().single()
+    const { data: cand, error: ce } = await db.from('candidates').insert({ position_id, name, bio, club_name: club_name || null }).select().single()
     if (ce) return res.status(500).json({ error: ce.message })
     await db.from('vote_totals').insert({ candidate_id: cand.id, total: 0 })
     return res.status(200).json({ candidate: cand })
