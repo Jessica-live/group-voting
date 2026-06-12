@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Head from 'next/head'
 
 export default function Admin() {
@@ -11,15 +11,23 @@ export default function Admin() {
   const [search, setSearch]     = useState('')
   const [editingClub, setEditingClub] = useState(null)
   const [editForm, setEditForm] = useState({})
-  const [newPos, setNewPos]     = useState('')
-  const [newCandPos, setNewCandPos]   = useState('')
-  const [newCandName, setNewCandName] = useState('')
-  const [newCandBio, setNewCandBio]   = useState('')
 
   // Add club form
   const [newClubFull, setNewClubFull]   = useState('')
   const [newClubShort, setNewClubShort] = useState('')
   const [newClubEligible, setNewClubEligible] = useState(true)
+
+  // Add position form
+  const [newPos, setNewPos] = useState('')
+
+  // Add candidate form
+  const [newCandPos, setNewCandPos]     = useState('')
+  const [newCandName, setNewCandName]   = useState('')
+  const [newCandBio, setNewCandBio]     = useState('')
+  const [newCandClub, setNewCandClub]   = useState('')       // selected club name
+  const [clubSearch, setClubSearch]     = useState('')       // search text in dropdown
+  const [showClubDrop, setShowClubDrop] = useState(false)   // dropdown open?
+  const dropRef = useRef(null)
 
   const headers = useCallback(() => ({ 'Content-Type': 'application/json', 'x-admin-secret': secret }), [secret])
 
@@ -37,6 +45,13 @@ export default function Admin() {
   }
 
   useEffect(() => { if (authed) load() }, [authed, load])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (dropRef.current && !dropRef.current.contains(e.target)) setShowClubDrop(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
 
@@ -82,10 +97,8 @@ export default function Admin() {
       body: JSON.stringify({ full_name: newClubFull.trim(), short_name: newClubShort.trim(), can_vote: newClubEligible })
     })
     const d = await res.json()
-    if (d.ok) {
-      setNewClubFull(''); setNewClubShort(''); setNewClubEligible(true)
-      flash('Club added — token generated automatically'); load()
-    } else flash('Error: ' + d.error)
+    if (d.ok) { setNewClubFull(''); setNewClubShort(''); setNewClubEligible(true); flash('Club added — token generated'); load() }
+    else flash('Error: ' + d.error)
   }
 
   const addPosition = async () => {
@@ -105,10 +118,10 @@ export default function Admin() {
     if (!newCandPos || !newCandName.trim()) return
     const res = await fetch('/api/admin?action=add-candidate', {
       method: 'POST', headers: headers(),
-      body: JSON.stringify({ position_id: parseInt(newCandPos), name: newCandName.trim(), bio: newCandBio.trim() })
+      body: JSON.stringify({ position_id: parseInt(newCandPos), name: newCandName.trim(), bio: newCandBio.trim(), club_name: newCandClub })
     })
     const d = await res.json()
-    if (d.candidate) { setNewCandName(''); setNewCandBio(''); flash('Candidate added'); load() }
+    if (d.candidate) { setNewCandName(''); setNewCandBio(''); setNewCandClub(''); setClubSearch(''); flash('Candidate added'); load() }
     else flash('Error: ' + d.error)
   }
 
@@ -119,9 +132,9 @@ export default function Admin() {
   }
 
   const S = {
-    card: { background: '#fff', border: '1px solid #e8e8e4', borderRadius: 14, padding: '20px 22px', marginBottom: 16 },
+    card:  { background: '#fff', border: '1px solid #e8e8e4', borderRadius: 14, padding: '20px 22px', marginBottom: 16 },
     input: { padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, color: '#1a1a1a', background: '#fff' },
-    btn: (c='#378ADD') => ({ padding: '7px 16px', borderRadius: 8, border: 'none', background: c, color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13 }),
+    btn:   (c='#378ADD') => ({ padding: '7px 16px', borderRadius: 8, border: 'none', background: c, color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13 }),
     label: { fontSize: 11, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, display: 'block' },
   }
 
@@ -129,6 +142,11 @@ export default function Admin() {
   const filteredTokens = tokens.filter(t =>
     !search || t.full_name?.toLowerCase().includes(search.toLowerCase()) || t.short_name?.toLowerCase().includes(search.toLowerCase())
   )
+
+  // Clubs list for candidate search dropdown
+  const allClubs = tokens.map(t => t.full_name || t.group_name).filter(Boolean).sort()
+  const filteredClubs = allClubs.filter(c => c.toLowerCase().includes(clubSearch.toLowerCase()))
+
   const canVoteCount = tokens.filter(t => t.can_vote).length
   const votedCount   = tokens.filter(t => t.is_used).length
   const pendingCount = tokens.filter(t => t.token?.startsWith('PENDING')).length
@@ -175,7 +193,6 @@ export default function Admin() {
           {/* ── CLUBS TAB ─────────────────────────────────────── */}
           {tab === 'clubs' && (
             <>
-              {/* Stats */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
                 {[
                   { label:'Total clubs', value: tokens.length },
@@ -190,7 +207,6 @@ export default function Admin() {
                 ))}
               </div>
 
-              {/* Add new club */}
               <div style={S.card}>
                 <span style={S.label}>Add a new club</span>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
@@ -198,8 +214,7 @@ export default function Admin() {
                     placeholder="Full club name e.g. Brisbane Sikh United"
                     style={{ ...S.input, flex:2, minWidth:200 }} />
                   <input value={newClubShort} onChange={e => setNewClubShort(e.target.value)}
-                    placeholder="Short name e.g. BSU"
-                    style={{ ...S.input, width:120 }} />
+                    placeholder="Short name e.g. BSU" style={{ ...S.input, width:130 }} />
                   <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:14, color:'#555', cursor:'pointer' }}>
                     <input type="checkbox" checked={newClubEligible} onChange={e => setNewClubEligible(e.target.checked)} />
                     Eligible to vote
@@ -208,7 +223,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Actions row */}
               <div style={{ display:'flex', gap:10, marginBottom:16, alignItems:'center', flexWrap:'wrap' }}>
                 <input value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="Search clubs..." style={{ ...S.input, width:240 }} />
@@ -221,10 +235,9 @@ export default function Admin() {
               </div>
 
               <div style={{ background:'#E6F1FB', border:'1px solid #B5D4F4', borderRadius:10, padding:'10px 16px', fontSize:13, color:'#0C447C', marginBottom:16 }}>
-                💡 Toggle the <strong>Eligible</strong> switch to control who can vote. Non-eligible clubs will see a message if they try to vote. Click <strong>Edit</strong> to fix names.
+                💡 Toggle the <strong>Eligible</strong> switch to control who can vote. Click <strong>Edit</strong> to update club names.
               </div>
 
-              {/* Clubs table */}
               <div style={S.card}>
                 <div style={{ overflowX:'auto' }}>
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -239,7 +252,6 @@ export default function Admin() {
                       {filteredTokens.map((t) => (
                         <tr key={t.id} style={{ borderBottom:'1px solid #f0f0ec', background: editingClub===t.id ? '#f8f4ff' : 'transparent' }}>
                           <td style={{ padding:'8px 10px', color:'#aaa', fontSize:12 }}>{tokens.indexOf(t)+1}</td>
-
                           {editingClub === t.id ? (
                             <>
                               <td style={{ padding:'8px 10px' }}>
@@ -257,39 +269,24 @@ export default function Admin() {
                               <td style={{ padding:'8px 10px', color:'#555', fontFamily:'monospace', fontSize:12 }}>{t.short_name || '—'}</td>
                             </>
                           )}
-
                           <td style={{ padding:'8px 10px' }}>
-                            {t.token?.startsWith('PENDING') ? (
-                              <span style={{ background:'#FAEEDA', color:'#854F0B', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>PENDING</span>
-                            ) : (
-                              <span style={{ fontFamily:'monospace', fontSize:12, color:'#555' }}>{t.token}</span>
-                            )}
+                            {t.token?.startsWith('PENDING')
+                              ? <span style={{ background:'#FAEEDA', color:'#854F0B', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>PENDING</span>
+                              : <span style={{ fontFamily:'monospace', fontSize:12, color:'#555' }}>{t.token}</span>}
                           </td>
-
                           <td style={{ padding:'8px 10px' }}>
-                            {t.can_vote ? (
-                              <span style={{ background:'#EAF3DE', color:'#3B6D11', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>Eligible</span>
-                            ) : (
-                              <span style={{ background:'#FCEBEB', color:'#A32D2D', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>Not eligible</span>
-                            )}
+                            {t.can_vote
+                              ? <span style={{ background:'#EAF3DE', color:'#3B6D11', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>Eligible</span>
+                              : <span style={{ background:'#FCEBEB', color:'#A32D2D', fontSize:11, padding:'2px 8px', borderRadius:6, fontWeight:600 }}>Not eligible</span>}
                           </td>
-
                           <td style={{ padding:'8px 10px', textAlign:'center' }}>
-                            <div onClick={() => toggleVoting(t.id, t.can_vote)} style={{
-                              width:40, height:22, borderRadius:99, cursor:'pointer', transition:'all 0.2s',
-                              background: t.can_vote ? '#639922' : '#ddd', position:'relative', display:'inline-block'
-                            }}>
-                              <div style={{
-                                position:'absolute', top:3, left: t.can_vote ? 21 : 3,
-                                width:16, height:16, borderRadius:'50%', background:'#fff', transition:'all 0.2s'
-                              }} />
+                            <div onClick={() => toggleVoting(t.id, t.can_vote)} style={{ width:40, height:22, borderRadius:99, cursor:'pointer', transition:'all 0.2s', background: t.can_vote ? '#639922' : '#ddd', position:'relative', display:'inline-block' }}>
+                              <div style={{ position:'absolute', top:3, left: t.can_vote ? 21 : 3, width:16, height:16, borderRadius:'50%', background:'#fff', transition:'all 0.2s' }} />
                             </div>
                           </td>
-
                           <td style={{ padding:'8px 10px', textAlign:'center' }}>
                             {t.is_used ? <span style={{ color:'#3B6D11', fontSize:16 }}>✓</span> : <span style={{ color:'#ccc', fontSize:12 }}>—</span>}
                           </td>
-
                           <td style={{ padding:'8px 10px', whiteSpace:'nowrap' }}>
                             {editingClub === t.id ? (
                               <div style={{ display:'flex', gap:6 }}>
@@ -318,9 +315,8 @@ export default function Admin() {
               <div style={S.card}>
                 <span style={S.label}>Add a new position</span>
                 <div style={{ display:'flex', gap:8 }}>
-                  <input value={newPos} onChange={e => setNewPos(e.target.value)}
-                    placeholder="e.g. Events Chair" onKeyDown={e => e.key==='Enter' && addPosition()}
-                    style={{ ...S.input, flex:1 }} />
+                  <input value={newPos} onChange={e => setNewPos(e.target.value)} placeholder="e.g. Events Chair"
+                    onKeyDown={e => e.key==='Enter' && addPosition()} style={{ ...S.input, flex:1 }} />
                   <button onClick={addPosition} style={S.btn()}>Add position</button>
                 </div>
               </div>
@@ -342,15 +338,60 @@ export default function Admin() {
               <div style={S.card}>
                 <span style={S.label}>Add a candidate</span>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  <select value={newCandPos} onChange={e => setNewCandPos(e.target.value)} style={{ ...S.input }}>
+
+                  {/* Position select */}
+                  <select value={newCandPos} onChange={e => setNewCandPos(e.target.value)} style={S.input}>
                     <option value="">Select position…</option>
                     {(data?.positions||[]).map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                   </select>
-                  <input value={newCandName} onChange={e => setNewCandName(e.target.value)} placeholder="Full name" style={S.input} />
-                  <input value={newCandBio} onChange={e => setNewCandBio(e.target.value)} placeholder="Short bio (optional)" style={S.input} />
+
+                  {/* Name */}
+                  <input value={newCandName} onChange={e => setNewCandName(e.target.value)}
+                    placeholder="Candidate full name" style={S.input} />
+
+                  {/* Club searchable dropdown */}
+                  <div ref={dropRef} style={{ position:'relative' }}>
+                    <div style={{ position:'relative' }}>
+                      <input
+                        value={newCandClub || clubSearch}
+                        onChange={e => { setClubSearch(e.target.value); setNewCandClub(''); setShowClubDrop(true) }}
+                        onFocus={() => setShowClubDrop(true)}
+                        placeholder="🔍  Search and select club name…"
+                        style={{ ...S.input, width:'100%', paddingRight:32 }}
+                      />
+                      {newCandClub && (
+                        <button onClick={() => { setNewCandClub(''); setClubSearch('') }}
+                          style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', fontSize:16, color:'#aaa' }}>✕</button>
+                      )}
+                    </div>
+                    {showClubDrop && filteredClubs.length > 0 && !newCandClub && (
+                      <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff', border:'1px solid #ddd', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.1)', zIndex:100, maxHeight:220, overflowY:'auto', marginTop:4 }}>
+                        {filteredClubs.map(club => (
+                          <div key={club} onClick={() => { setNewCandClub(club); setClubSearch(''); setShowClubDrop(false) }}
+                            style={{ padding:'10px 14px', cursor:'pointer', fontSize:14, color:'#1a1a1a', borderBottom:'1px solid #f5f5f5' }}
+                            onMouseEnter={e => e.currentTarget.style.background='#f0f7ff'}
+                            onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                            {club}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {newCandClub && (
+                      <div style={{ marginTop:4, fontSize:13, color:'#3B6D11', padding:'4px 8px', background:'#EAF3DE', borderRadius:6, display:'inline-block' }}>
+                        ✓ {newCandClub}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bio */}
+                  <input value={newCandBio} onChange={e => setNewCandBio(e.target.value)}
+                    placeholder="Short bio (optional)" style={S.input} />
+
                   <button onClick={addCandidate} style={S.btn()}>Add candidate</button>
                 </div>
               </div>
+
+              {/* Candidate list per position */}
               {(data?.positions||[]).map(pos => {
                 const cands = (data?.candidates||[]).filter(c => c.position_id === pos.id)
                 return (
@@ -358,12 +399,17 @@ export default function Admin() {
                     <span style={S.label}>{pos.title} ({cands.length} candidates)</span>
                     {cands.length === 0 && <p style={{ color:'#bbb', fontSize:14 }}>No candidates yet</p>}
                     {cands.map(c => (
-                      <div key={c.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid #f0f0ec' }}>
+                      <div key={c.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid #f0f0ec' }}>
                         <div style={{ flex:1 }}>
                           <div style={{ fontWeight:500, color:'#1a1a1a', fontSize:14 }}>{c.name}</div>
-                          {c.bio && <div style={{ fontSize:12, color:'#aaa' }}>{c.bio}</div>}
+                          {c.club_name && (
+                            <div style={{ fontSize:12, color:'#185FA5', marginTop:2, background:'#E6F1FB', display:'inline-block', padding:'1px 8px', borderRadius:99 }}>
+                              {c.club_name}
+                            </div>
+                          )}
+                          {c.bio && <div style={{ fontSize:12, color:'#aaa', marginTop:3 }}>{c.bio}</div>}
                         </div>
-                        <div style={{ fontWeight:600, color:'#378ADD' }}>
+                        <div style={{ fontWeight:600, color:'#378ADD', fontSize:15 }}>
                           {(data?.totals||[]).find(t => t.candidate_id === c.id)?.total || 0} votes
                         </div>
                         <button onClick={() => deleteCandidate(c.id)} style={{ ...S.btn('#E24B4A'), padding:'5px 12px' }}>Remove</button>
