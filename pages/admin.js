@@ -6,15 +6,20 @@ export default function Admin() {
   const [authed, setAuthed]     = useState(false)
   const [authErr, setAuthErr]   = useState('')
   const [data, setData]         = useState(null)
-  const [tab, setTab]           = useState('groups')
+  const [tab, setTab]           = useState('clubs')
   const [msg, setMsg]           = useState('')
   const [search, setSearch]     = useState('')
-  const [editingGroup, setEditingGroup] = useState(null)
+  const [editingClub, setEditingClub] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [newPos, setNewPos]     = useState('')
   const [newCandPos, setNewCandPos]   = useState('')
   const [newCandName, setNewCandName] = useState('')
   const [newCandBio, setNewCandBio]   = useState('')
+
+  // Add club form
+  const [newClubFull, setNewClubFull]   = useState('')
+  const [newClubShort, setNewClubShort] = useState('')
+  const [newClubEligible, setNewClubEligible] = useState(true)
 
   const headers = useCallback(() => ({ 'Content-Type': 'application/json', 'x-admin-secret': secret }), [secret])
 
@@ -36,10 +41,10 @@ export default function Admin() {
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
 
   const generateTokens = async () => {
-    if (!confirm('Generate real tokens for all groups? PENDING tokens will be replaced.')) return
+    if (!confirm('Generate real tokens for all pending clubs?')) return
     const res = await fetch('/api/admin?action=generate-tokens', { method: 'POST', headers: headers(), body: JSON.stringify({}) })
     const d = await res.json()
-    if (d.ok || d.tokens) { flash(`Tokens generated successfully`); load() }
+    if (d.ok || d.tokens) { flash('Tokens generated successfully'); load() }
     else flash('Error: ' + d.error)
   }
 
@@ -48,11 +53,11 @@ export default function Admin() {
       method: 'POST', headers: headers(),
       body: JSON.stringify({ id, can_vote: !current })
     })
-    if ((await res.json()).ok) { flash(`Voting eligibility updated`); load() }
+    if ((await res.json()).ok) { flash('Voting eligibility updated'); load() }
   }
 
   const startEdit = (g) => {
-    setEditingGroup(g.id)
+    setEditingClub(g.id)
     setEditForm({ group_name: g.group_name, full_name: g.full_name || g.group_name, short_name: g.short_name || '' })
   }
 
@@ -61,13 +66,26 @@ export default function Admin() {
       method: 'POST', headers: headers(),
       body: JSON.stringify({ id, ...editForm })
     })
-    if ((await res.json()).ok) { setEditingGroup(null); flash('Group updated'); load() }
+    if ((await res.json()).ok) { setEditingClub(null); flash('Club updated'); load() }
   }
 
   const resetToken = async (id) => {
-    if (!confirm('Reset this token so the group can vote again?')) return
+    if (!confirm('Reset this token so the club can vote again?')) return
     const res = await fetch('/api/admin?action=reset-token', { method: 'POST', headers: headers(), body: JSON.stringify({ id }) })
     if ((await res.json()).ok) { flash('Token reset'); load() }
+  }
+
+  const addClub = async () => {
+    if (!newClubFull.trim()) return
+    const res = await fetch('/api/admin?action=add-club', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({ full_name: newClubFull.trim(), short_name: newClubShort.trim(), can_vote: newClubEligible })
+    })
+    const d = await res.json()
+    if (d.ok) {
+      setNewClubFull(''); setNewClubShort(''); setNewClubEligible(true)
+      flash('Club added — token generated automatically'); load()
+    } else flash('Error: ' + d.error)
   }
 
   const addPosition = async () => {
@@ -109,7 +127,7 @@ export default function Admin() {
 
   const tokens = data?.tokens || []
   const filteredTokens = tokens.filter(t =>
-    !search || t.group_name?.toLowerCase().includes(search.toLowerCase()) || t.short_name?.toLowerCase().includes(search.toLowerCase())
+    !search || t.full_name?.toLowerCase().includes(search.toLowerCase()) || t.short_name?.toLowerCase().includes(search.toLowerCase())
   )
   const canVoteCount = tokens.filter(t => t.can_vote).length
   const votedCount   = tokens.filter(t => t.is_used).length
@@ -119,7 +137,7 @@ export default function Admin() {
     <div style={{ minHeight:'100vh', background:'#f8f8f6', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'system-ui' }}>
       <div style={{ ...S.card, width:340 }}>
         <h2 style={{ fontSize:18, fontWeight:600, marginBottom:4 }}>Admin login</h2>
-        <p style={{ fontSize:13, color:'#888', marginBottom:20 }}>Group Elections admin panel</p>
+        <p style={{ fontSize:13, color:'#888', marginBottom:20 }}>Club Elections admin panel</p>
         <input type="password" placeholder="Admin password" value={secret} onChange={e => setSecret(e.target.value)}
           onKeyDown={e => e.key==='Enter' && login()} style={{ ...S.input, width:'100%', marginBottom:12 }} />
         {authErr && <p style={{ color:'#A32D2D', fontSize:13, marginBottom:10 }}>{authErr}</p>}
@@ -130,20 +148,20 @@ export default function Admin() {
 
   return (
     <>
-      <Head><title>Admin — Group Elections</title></Head>
+      <Head><title>Admin — Club Elections</title></Head>
       <div style={{ minHeight:'100vh', background:'#f8f8f6', fontFamily:'system-ui' }}>
         <header style={{ background:'#fff', borderBottom:'1px solid #e8e8e4', padding:'0 24px' }}>
           <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:60 }}>
             <span style={{ fontWeight:600, fontSize:17 }}>🛡️ Admin panel</span>
             <div style={{ display:'flex', gap:6 }}>
-              {['groups','positions','candidates'].map(t => (
+              {['clubs','positions','candidates'].map(t => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   padding:'6px 16px', borderRadius:8, fontSize:13, cursor:'pointer',
                   border: tab===t ? '1.5px solid #378ADD' : '1px solid #ddd',
                   background: tab===t ? '#E6F1FB' : '#fff',
                   color: tab===t ? '#185FA5' : '#555', fontWeight: tab===t ? 600 : 400,
                 }}>
-                  {t === 'groups' ? '👥 Groups' : t === 'positions' ? '📋 Positions' : '🙋 Candidates'}
+                  {t === 'clubs' ? '🏏 Clubs' : t === 'positions' ? '📋 Positions' : '🙋 Candidates'}
                 </button>
               ))}
             </div>
@@ -154,13 +172,13 @@ export default function Admin() {
 
         <main style={{ maxWidth:1000, margin:'0 auto', padding:'28px 24px' }}>
 
-          {/* ── GROUPS TAB ─────────────────────────────────────── */}
-          {tab === 'groups' && (
+          {/* ── CLUBS TAB ─────────────────────────────────────── */}
+          {tab === 'clubs' && (
             <>
               {/* Stats */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
                 {[
-                  { label:'Total groups', value: tokens.length },
+                  { label:'Total clubs', value: tokens.length },
                   { label:'Eligible to vote', value: canVoteCount, color:'#3B6D11' },
                   { label:'Not eligible', value: tokens.length - canVoteCount, color:'#A32D2D' },
                   { label:'Voted so far', value: votedCount, color:'#185FA5' },
@@ -172,24 +190,41 @@ export default function Admin() {
                 ))}
               </div>
 
+              {/* Add new club */}
+              <div style={S.card}>
+                <span style={S.label}>Add a new club</span>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                  <input value={newClubFull} onChange={e => setNewClubFull(e.target.value)}
+                    placeholder="Full club name e.g. Brisbane Sikh United"
+                    style={{ ...S.input, flex:2, minWidth:200 }} />
+                  <input value={newClubShort} onChange={e => setNewClubShort(e.target.value)}
+                    placeholder="Short name e.g. BSU"
+                    style={{ ...S.input, width:120 }} />
+                  <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:14, color:'#555', cursor:'pointer' }}>
+                    <input type="checkbox" checked={newClubEligible} onChange={e => setNewClubEligible(e.target.checked)} />
+                    Eligible to vote
+                  </label>
+                  <button onClick={addClub} style={S.btn('#639922')}>Add club</button>
+                </div>
+              </div>
+
               {/* Actions row */}
               <div style={{ display:'flex', gap:10, marginBottom:16, alignItems:'center', flexWrap:'wrap' }}>
                 <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Search groups..." style={{ ...S.input, width:240 }} />
+                  placeholder="Search clubs..." style={{ ...S.input, width:240 }} />
                 {pendingCount > 0 && (
                   <button onClick={generateTokens} style={S.btn('#639922')}>
-                    Generate tokens for {pendingCount} pending groups
+                    Generate tokens for {pendingCount} pending clubs
                   </button>
                 )}
-                <span style={{ fontSize:13, color:'#888', marginLeft:'auto' }}>{filteredTokens.length} of {tokens.length} groups shown</span>
+                <span style={{ fontSize:13, color:'#888', marginLeft:'auto' }}>{filteredTokens.length} of {tokens.length} clubs shown</span>
               </div>
 
-              {/* Info banner */}
               <div style={{ background:'#E6F1FB', border:'1px solid #B5D4F4', borderRadius:10, padding:'10px 16px', fontSize:13, color:'#0C447C', marginBottom:16 }}>
-                💡 Toggle the <strong>Eligible</strong> switch to control who can vote — e.g. when a group pays their fees. Click <strong>Edit</strong> to fix incomplete names.
+                💡 Toggle the <strong>Eligible</strong> switch to control who can vote. Non-eligible clubs will see a message if they try to vote. Click <strong>Edit</strong> to fix names.
               </div>
 
-              {/* Groups table */}
+              {/* Clubs table */}
               <div style={S.card}>
                 <div style={{ overflowX:'auto' }}>
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -201,11 +236,11 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredTokens.map((t, idx) => (
-                        <tr key={t.id} style={{ borderBottom:'1px solid #f0f0ec', background: editingGroup===t.id ? '#f8f4ff' : 'transparent' }}>
+                      {filteredTokens.map((t) => (
+                        <tr key={t.id} style={{ borderBottom:'1px solid #f0f0ec', background: editingClub===t.id ? '#f8f4ff' : 'transparent' }}>
                           <td style={{ padding:'8px 10px', color:'#aaa', fontSize:12 }}>{tokens.indexOf(t)+1}</td>
 
-                          {editingGroup === t.id ? (
+                          {editingClub === t.id ? (
                             <>
                               <td style={{ padding:'8px 10px' }}>
                                 <input value={editForm.full_name} onChange={e => setEditForm(f=>({...f,full_name:e.target.value}))}
@@ -252,18 +287,14 @@ export default function Admin() {
                           </td>
 
                           <td style={{ padding:'8px 10px', textAlign:'center' }}>
-                            {t.is_used ? (
-                              <span style={{ color:'#3B6D11', fontSize:16 }}>✓</span>
-                            ) : (
-                              <span style={{ color:'#ccc', fontSize:12 }}>—</span>
-                            )}
+                            {t.is_used ? <span style={{ color:'#3B6D11', fontSize:16 }}>✓</span> : <span style={{ color:'#ccc', fontSize:12 }}>—</span>}
                           </td>
 
                           <td style={{ padding:'8px 10px', whiteSpace:'nowrap' }}>
-                            {editingGroup === t.id ? (
+                            {editingClub === t.id ? (
                               <div style={{ display:'flex', gap:6 }}>
                                 <button onClick={() => saveEdit(t.id)} style={{ ...S.btn('#639922'), padding:'4px 10px' }}>Save</button>
-                                <button onClick={() => setEditingGroup(null)} style={{ ...S.btn('#888'), padding:'4px 10px' }}>Cancel</button>
+                                <button onClick={() => setEditingClub(null)} style={{ ...S.btn('#888'), padding:'4px 10px' }}>Cancel</button>
                               </div>
                             ) : (
                               <div style={{ display:'flex', gap:6 }}>
