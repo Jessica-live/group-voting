@@ -17,6 +17,11 @@ export default function Admin() {
   const [newClubShort, setNewClubShort] = useState('')
   const [newClubEligible, setNewClubEligible] = useState(true)
 
+  // Voting window
+  const [votingStart, setVotingStart] = useState('')
+  const [votingEnd, setVotingEnd]     = useState('')
+  const [windowSaved, setWindowSaved] = useState(false)
+
   // Add position form
   const [newPos, setNewPos] = useState('')
 
@@ -40,7 +45,7 @@ export default function Admin() {
   const login = async () => {
     setAuthErr('')
     const res = await fetch('/api/admin?action=dashboard', { headers: headers() })
-    if (res.ok) { setAuthed(true); setData(await res.json()) }
+    if (res.ok) { setAuthed(true); const d = await res.json(); setData(d); loadWindow(d) }
     else setAuthErr('Incorrect password')
   }
 
@@ -54,6 +59,35 @@ export default function Admin() {
   }, [])
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3500) }
+
+  const loadWindow = async () => {
+    const res = await fetch('/api/admin?action=voting-window', { headers: headers() })
+    if (!res.ok) return
+    const d = await res.json()
+    if (d.voting_start) setVotingStart(d.voting_start.slice(0,16))
+    if (d.voting_end)   setVotingEnd(d.voting_end.slice(0,16))
+  }
+
+  const saveWindow = async () => {
+    const res = await fetch('/api/admin?action=voting-window', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({
+        voting_start: votingStart ? new Date(votingStart).toISOString() : null,
+        voting_end:   votingEnd   ? new Date(votingEnd).toISOString()   : null,
+      })
+    })
+    const d = await res.json()
+    if (d.ok) { setWindowSaved(true); setTimeout(() => setWindowSaved(false), 3000); flash('Voting window saved') }
+    else flash('Error: ' + d.error)
+  }
+
+  const clearWindow = async () => {
+    const res = await fetch('/api/admin?action=voting-window', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({ voting_start: null, voting_end: null })
+    })
+    if ((await res.json()).ok) { setVotingStart(''); setVotingEnd(''); flash('Voting window cleared — voting is now always open') }
+  }
 
   const generateTokens = async () => {
     if (!confirm('Generate real tokens for all pending clubs?')) return
@@ -172,14 +206,14 @@ export default function Admin() {
           <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', height:60 }}>
             <span style={{ fontWeight:600, fontSize:17 }}>🛡️ Admin panel</span>
             <div style={{ display:'flex', gap:6 }}>
-              {['clubs','positions','candidates'].map(t => (
+              {['clubs','positions','candidates','window'].map(t => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   padding:'6px 16px', borderRadius:8, fontSize:13, cursor:'pointer',
                   border: tab===t ? '1.5px solid #378ADD' : '1px solid #ddd',
                   background: tab===t ? '#E6F1FB' : '#fff',
                   color: tab===t ? '#185FA5' : '#555', fontWeight: tab===t ? 600 : 400,
                 }}>
-                  {t === 'clubs' ? '🏏 Clubs' : t === 'positions' ? '📋 Positions' : '🙋 Candidates'}
+                  {t === 'clubs' ? '🏏 Clubs' : t === 'positions' ? '📋 Positions' : t === 'candidates' ? '🙋 Candidates' : '🕐 Voting Window'}
                 </button>
               ))}
             </div>
@@ -420,6 +454,68 @@ export default function Admin() {
               })}
             </>
           )}
+          {/* ── VOTING WINDOW TAB ────────────────────────────── */}
+          {tab === 'window' && (
+            <>
+              <div style={{ ...S.card, maxWidth: 560 }}>
+                <span style={S.label}>Set the voting time window</span>
+                <p style={{ fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 1.5 }}>
+                  Clubs can only submit votes between the start and end times you set here. Leave both blank to allow voting at any time.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <label style={{ ...S.label, marginBottom: 6 }}>Voting opens (start time)</label>
+                    <input type="datetime-local" value={votingStart} onChange={e => setVotingStart(e.target.value)}
+                      style={{ ...S.input, width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ ...S.label, marginBottom: 6 }}>Voting closes (end time)</label>
+                    <input type="datetime-local" value={votingEnd} onChange={e => setVotingEnd(e.target.value)}
+                      style={{ ...S.input, width: '100%' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                    <button onClick={saveWindow} style={{ ...S.btn('#378ADD'), flex: 1, padding: 10 }}>
+                      {windowSaved ? '✓ Saved!' : 'Save window'}
+                    </button>
+                    <button onClick={clearWindow} style={{ ...S.btn('#888'), padding: '10px 20px' }}>
+                      Clear (always open)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current status card */}
+              <div style={{ ...S.card, maxWidth: 560, background: '#f8f8f6' }}>
+                <span style={S.label}>Current status</span>
+                {!votingStart && !votingEnd ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#639922', display: 'inline-block' }} />
+                    <span style={{ color: '#3B6D11', fontWeight: 500 }}>Voting is always open</span>
+                  </div>
+                ) : (() => {
+                  const now = new Date()
+                  const start = votingStart ? new Date(votingStart) : null
+                  const end   = votingEnd   ? new Date(votingEnd)   : null
+                  const isOpen = (!start || now >= start) && (!end || now <= end)
+                  const notStarted = start && now < start
+                  const closed = end && now > end
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, marginBottom: 12 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: notStarted ? '#F5A623' : closed ? '#E24B4A' : '#639922', display: 'inline-block' }} />
+                        <span style={{ fontWeight: 600, color: notStarted ? '#854F0B' : closed ? '#A32D2D' : '#3B6D11' }}>
+                          {notStarted ? 'Voting not yet open' : closed ? 'Voting is closed' : 'Voting is open'}
+                        </span>
+                      </div>
+                      {votingStart && <p style={{ fontSize: 13, color: '#666', margin: '4px 0' }}>🟢 Opens: <strong>{new Date(votingStart).toLocaleString()}</strong></p>}
+                      {votingEnd   && <p style={{ fontSize: 13, color: '#666', margin: '4px 0' }}>🔴 Closes: <strong>{new Date(votingEnd).toLocaleString()}</strong></p>}
+                    </div>
+                  )
+                })()}
+              </div>
+            </>
+          )}
+
         </main>
       </div>
     </>
