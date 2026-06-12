@@ -23,28 +23,13 @@ export default async function handler(req, res) {
       db.from('candidates').select('*').order('position_id'),
       db.from('vote_totals').select('*'),
     ])
-    // Return errors explicitly so we can debug
-    if (t.error || p.error || c.error || v.error) {
-      return res.status(200).json({
-        tokens: t.data,
-        positions: p.data,
-        candidates: c.data,
-        totals: v.data,
-        _errors: {
-          tokens: t.error?.message,
-          positions: p.error?.message,
-          candidates: c.error?.message,
-          totals: v.error?.message,
-        },
-        _env: {
-          url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0,30),
-          keyPrefix: process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0,20),
-        }
-      })
+    if (t.error || p.error) {
+      return res.status(200).json({ tokens: t.data, positions: p.data, candidates: c.data, totals: v.data, _errors: { tokens: t.error?.message, positions: p.error?.message } })
     }
     return res.status(200).json({ tokens: t.data, positions: p.data, candidates: c.data, totals: v.data })
   }
 
+  // Generate tokens for PENDING clubs
   if (req.method === 'POST' && action === 'generate-tokens') {
     const { data: pending } = await db.from('tokens').select('id').like('token', 'PENDING-%')
     if (pending && pending.length > 0) {
@@ -56,6 +41,29 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No pending tokens found' })
   }
 
+  // Add a new club with auto-generated token
+  if (req.method === 'POST' && action === 'add-club') {
+    const { full_name, short_name, can_vote } = req.body
+    if (!full_name) return res.status(400).json({ error: 'Full name required' })
+
+    // Get current max id to generate a sensible token number
+    const { data: existing } = await db.from('tokens').select('id').order('id', { ascending: false }).limit(1)
+    const nextIndex = existing && existing.length > 0 ? existing[0].id + 1 : 1
+    const token = generateToken(nextIndex)
+
+    const { error } = await db.from('tokens').insert({
+      token,
+      group_name: full_name,
+      full_name,
+      short_name: short_name || '',
+      can_vote: can_vote !== false,
+    })
+
+    if (error) return res.status(500).json({ error: error.message })
+    return res.status(200).json({ ok: true, token })
+  }
+
+  // Toggle voting eligibility
   if (req.method === 'POST' && action === 'toggle-voting') {
     const { id, can_vote } = req.body
     const { error } = await db.from('tokens').update({ can_vote }).eq('id', id)
@@ -63,6 +71,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true })
   }
 
+  // Update club names
   if (req.method === 'POST' && action === 'update-group') {
     const { id, group_name, full_name, short_name } = req.body
     const { error } = await db.from('tokens').update({ group_name, full_name, short_name }).eq('id', id)
@@ -70,6 +79,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true })
   }
 
+  // Reset token
   if (req.method === 'POST' && action === 'reset-token') {
     const { id } = req.body
     const { error } = await db.from('tokens').update({ is_used: false, used_at: null }).eq('id', id)
@@ -77,6 +87,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true })
   }
 
+  // Add position
   if (req.method === 'POST' && action === 'add-position') {
     const { title, sort_order } = req.body
     if (!title) return res.status(400).json({ error: 'Title required' })
@@ -85,6 +96,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ position: data })
   }
 
+  // Delete position
   if (req.method === 'DELETE' && action === 'delete-position') {
     const { id } = req.body
     const { error } = await db.from('positions').delete().eq('id', id)
@@ -92,6 +104,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true })
   }
 
+  // Add candidate
   if (req.method === 'POST' && action === 'add-candidate') {
     const { position_id, name, bio } = req.body
     if (!position_id || !name) return res.status(400).json({ error: 'position_id and name required' })
@@ -101,6 +114,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ candidate: cand })
   }
 
+  // Delete candidate
   if (req.method === 'DELETE' && action === 'delete-candidate') {
     const { id } = req.body
     const { error } = await db.from('candidates').delete().eq('id', id)
