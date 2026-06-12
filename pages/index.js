@@ -34,6 +34,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
+    fetch('/api/voting-status').then(r => r.json()).then(setVotingStatus).catch(() => {})
     loadData()
     // Real-time updates for the tally board
     const channel = supabase
@@ -161,6 +162,23 @@ export default function Home() {
                 ))}
               </div>
 
+              {/* Voting window banner */}
+              {votingStatus?.status === 'not_started' && (
+                <div style={{ background: '#FAEEDA', border: '1px solid #F5A623', borderRadius: 10, padding: '10px 16px', fontSize: 14, color: '#854F0B', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span>⏳</span> <span>Voting opens on <strong>{new Date(votingStatus.voting_start).toLocaleString()}</strong></span>
+                </div>
+              )}
+              {votingStatus?.status === 'closed' && (
+                <div style={{ background: '#FCEBEB', border: '1px solid #E24B4A', borderRadius: 10, padding: '10px 16px', fontSize: 14, color: '#A32D2D', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span>🔒</span> <span>Voting closed on <strong>{new Date(votingStatus.voting_end).toLocaleString()}</strong>. These are the final results.</span>
+                </div>
+              )}
+              {votingStatus?.status === 'open' && votingStatus?.voting_end && (
+                <div style={{ background: '#EAF3DE', border: '1px solid #C0DD97', borderRadius: 10, padding: '10px 16px', fontSize: 14, color: '#3B6D11', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span>🟢</span> <span>Voting is open. Closes on <strong>{new Date(votingStatus.voting_end).toLocaleString()}</strong></span>
+                </div>
+              )}
+
               {/* Position filter */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                 <button onClick={() => setFilterPos(null)} style={{
@@ -216,7 +234,23 @@ export default function Home() {
           {/* ── VOTE TAB ────────────────────────────────────── */}
           {tab === 'vote' && (
             <div style={{ maxWidth: 560, margin: '0 auto' }}>
-              {submitted ? (
+              {/* Voting window checks */}
+              {votingStatus?.status === 'not_started' && (
+                <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 8 }}>Voting hasn't started yet</h2>
+                  <p style={{ color: '#888', fontSize: 15 }}>Voting opens on <strong>{new Date(votingStatus.voting_start).toLocaleString()}</strong></p>
+                </div>
+              )}
+              {votingStatus?.status === 'closed' && (
+                <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 8 }}>Voting is closed</h2>
+                  <p style={{ color: '#888', fontSize: 15 }}>Voting closed on <strong>{new Date(votingStatus.voting_end).toLocaleString()}</strong></p>
+                  <button onClick={() => setTab('tally')} style={{ marginTop: 24, padding: '10px 24px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 14 }}>View final results</button>
+                </div>
+              )}
+              {(!votingStatus || votingStatus.status === 'open') && submitted ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
                   <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', marginBottom: 8 }}>Vote submitted</h2>
@@ -306,7 +340,7 @@ export default function Home() {
                     </>
                   )}
                 </>
-              )}
+              }
             </div>
           )}
         </main>
