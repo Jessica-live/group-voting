@@ -114,7 +114,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Group Voting System</title>
+        <title>Club Elections</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -123,7 +123,7 @@ export default function Home() {
         <header style={{ background: '#fff', borderBottom: '1px solid #e8e8e4', padding: '0 24px' }}>
           <div style={{ maxWidth: 780, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
             <div>
-              <span style={{ fontWeight: 600, fontSize: 17, color: '#1a1a1a' }}>Group Elections</span>
+              <span style={{ fontWeight: 600, fontSize: 17, color: '#1a1a1a' }}>Club Elections</span>
               <span style={{ fontSize: 13, color: '#888', marginLeft: 10 }}>Anonymous · Transparent</span>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -229,7 +229,7 @@ export default function Home() {
                 <>
                   <div style={{ background: '#EAF3DE', border: '1px solid #C0DD97', borderRadius: 10, padding: '12px 16px', display: 'flex', gap: 10, marginBottom: 24, fontSize: 14, color: '#3B6D11' }}>
                     <span>🔒</span>
-                    <span>Your group's identity is never linked to your vote choices. Once submitted, the connection is permanently severed.</span>
+                    <span>Your club's identity is never linked to your vote choices. Once submitted, the connection is permanently severed.</span>
                   </div>
 
                   {/* Token entry */}
