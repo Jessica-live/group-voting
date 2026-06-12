@@ -42,6 +42,22 @@ export default async function handler(req, res) {
   }
 
   // Add a new club with auto-generated token
+  // Get voting window
+  if (req.method === 'GET' && action === 'voting-window') {
+    const { data, error } = await db.from('settings').select('voting_start, voting_end').eq('id', 1).single()
+    if (error) return res.status(500).json({ error: error.message })
+    return res.status(200).json(data)
+  }
+
+  // Set voting window
+  if (req.method === 'POST' && action === 'voting-window') {
+    const { voting_start, voting_end } = req.body
+    const { error } = await db.from('settings')
+      .upsert({ id: 1, voting_start: voting_start || null, voting_end: voting_end || null })
+    if (error) return res.status(500).json({ error: error.message })
+    return res.status(200).json({ ok: true })
+  }
+
   if (req.method === 'POST' && action === 'add-club') {
     const { full_name, short_name, can_vote } = req.body
     if (!full_name) return res.status(400).json({ error: 'Full name required' })
