@@ -197,7 +197,8 @@ export default function Home() {
                             {initials(c.name)}
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 15, fontWeight: 500, color: '#1a1a1a', marginBottom: 5 }}>{c.name}</div>
+                            <div style={{ fontSize: 15, fontWeight: 500, color: '#1a1a1a' }}>{c.name}</div>
+                            {c.club_name && <div style={{ fontSize: 11, color: '#185FA5', background: '#E6F1FB', display: 'inline-block', padding: '1px 7px', borderRadius: 99, marginBottom: 5, marginTop: 2 }}>{c.club_name}</div>}
                             <div style={{ height: 7, background: '#f0f0ec', borderRadius: 99, overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${pct}%`, background: '#378ADD', borderRadius: 99, transition: 'width 0.6s ease' }} />
                             </div>
@@ -281,7 +282,8 @@ export default function Home() {
                                   </div>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: 15, fontWeight: 500, color: '#1a1a1a' }}>{c.name}</div>
-                                    {c.bio && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{c.bio}</div>}
+                                    {c.club_name && <div style={{ fontSize: 11, color: '#185FA5', background: '#ddeeff', display: 'inline-block', padding: '1px 7px', borderRadius: 99, marginTop: 2 }}>{c.club_name}</div>}
+                                    {c.bio && <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{c.bio}</div>}
                                   </div>
                                   <div style={{ width: 20, height: 20, borderRadius: '50%', border: selected ? 'none' : '2px solid #ccc', background: selected ? '#378ADD' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     {selected && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
