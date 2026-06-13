@@ -1,6 +1,5 @@
 // pages/index.js  —  Public voting page (tally + ballot)
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import Head from 'next/head'
 
 export default function Home() {
@@ -21,11 +20,9 @@ export default function Home() {
 
   // ── Load data ────────────────────────────────────────────
   const loadData = useCallback(async () => {
-    const [{ data: pos }, { data: cands }, { data: tots }] = await Promise.all([
-      supabase.from('positions').select('*').eq('is_active', true).order('sort_order'),
-      supabase.from('candidates').select('*').order('name'),
-      supabase.from('vote_totals').select('*'),
-    ])
+    const res = await fetch('/api/public-data')
+    if (!res.ok) return
+    const { positions: pos, candidates: cands, totals: tots } = await res.json()
     setPositions(pos || [])
     setCandidates(cands || [])
     const map = {}
@@ -36,14 +33,9 @@ export default function Home() {
   useEffect(() => {
     fetch('/api/voting-status').then(r => r.json()).then(setVotingStatus).catch(() => {})
     loadData()
-    // Real-time updates for the tally board
-    const channel = supabase
-      .channel('vote_totals_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vote_totals' }, () => {
-        loadData()
-      })
-      .subscribe()
-    return () => supabase.removeChannel(channel)
+    // Poll every 5 seconds for live tally updates
+    const interval = setInterval(loadData, 5000)
+    return () => clearInterval(interval)
   }, [loadData])
 
   // ── Tally helpers ─────────────────────────────────────────
